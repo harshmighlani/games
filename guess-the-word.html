@@ -150,6 +150,12 @@
             min-height: 50px; /* Reserve space */
         }
 
+        /* Ensure word suggestion is truly hidden until revealed */
+        .word-suggestion.hidden-word {
+            opacity: 0 !important;
+            visibility: hidden !important;
+        }
+
         .message-box {
             position: fixed;
             top: 50%;
@@ -165,6 +171,7 @@
             visibility: hidden;
             transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
             font-size: 1.1rem;
+            text-align: center;
         }
 
         .message-box.show {
@@ -236,8 +243,8 @@
             </select>
         </div>
 
-        <div id="wordSuggestion" class="word-suggestion opacity-0 transition-opacity duration-500">
-            <!-- Word will appear here -->
+        <div id="wordSuggestion" class="word-suggestion hidden-word">
+            <!-- Word will appear here, initially hidden -->
         </div>
         <button id="revealWordBtn" class="spin-button" style="display:none;">Reveal Word</button>
 
@@ -287,7 +294,7 @@
         const wordSuggestionDiv = document.getElementById('wordSuggestion');
         const spinBtn = document.getElementById('spinBtn');
         const revealWordBtn = document.getElementById('revealWordBtn');
-        const difficultySelector = document.getElementById('difficulty'); // New difficulty selector
+        const difficultySelector = document.getElementById('difficulty');
         const messageBox = document.getElementById('messageBox');
 
         let timerInterval;
@@ -422,17 +429,13 @@
          */
         function onSpinComplete() {
             if (!isSpinningLeft && !isSpinningRight) {
-                // The currentSuggestedWord is already set in the spinBtn click handler
-                // because we choose the word *before* spinning the wheels.
                 if (currentSuggestedWord) {
                     wordSuggestionDiv.textContent = `Word: ${currentSuggestedWord.toUpperCase()}!`;
-                    // Now, immediately hide the content and show the reveal button.
-                    // The transition will apply from this point.
-                    wordSuggestionDiv.classList.add('opacity-0');
+                    wordSuggestionDiv.classList.add('hidden-word'); // Ensure it stays hidden
                     revealWordBtn.style.display = 'block'; // Show the reveal button
                 } else {
                     wordSuggestionDiv.textContent = `No words found for the selected difficulty. Try a different level.`;
-                    wordSuggestionDiv.classList.remove('opacity-0'); // Show error message immediately
+                    wordSuggestionDiv.classList.remove('hidden-word'); // Make error message visible
                     revealWordBtn.style.display = 'none'; // Ensure reveal button is hidden
                     showMessage("No words found for this difficulty.", 3000);
                 }
@@ -445,21 +448,21 @@
         spinBtn.addEventListener('click', async () => {
             if (isSpinningLeft || isSpinningRight) return; // Prevent multiple spins if already in progress
 
-            isSpinningLeft = true; // Set both flags to true as both wheels will spin
+            isSpinningLeft = true;
             isSpinningRight = true;
             toggleButtons(false); // Disable spin button and difficulty selector during spin
             revealWordBtn.style.display = 'none'; // Hide reveal button
-            
-            // Ensure wordSuggestionDiv is visible to show "Spinning wheels..." message
-            wordSuggestionDiv.classList.remove('opacity-0'); 
-            wordSuggestionDiv.textContent = 'Spinning wheels...'; // Display spinning message
+            wordSuggestionDiv.textContent = ''; // Clear any previous word text
+            wordSuggestionDiv.classList.add('hidden-word'); // Ensure hidden at start of new spin
+
+            showMessage('Spinning wheels...', 1500); // Show temporary spinning message
 
             const selectedDifficulty = difficultySelector.value;
             const availableWords = getWordsByDifficulty(selectedDifficulty);
 
             if (availableWords.length === 0) {
                 wordSuggestionDiv.textContent = `No words found for '${selectedDifficulty}' difficulty. Please choose another level.`;
-                wordSuggestionDiv.classList.remove('opacity-0');
+                wordSuggestionDiv.classList.remove('hidden-word'); // Show error message
                 toggleButtons(true);
                 isSpinningLeft = false;
                 isSpinningRight = false;
@@ -468,44 +471,40 @@
                 return;
             }
 
-            // Select a random word from the filtered dictionary
             currentSuggestedWord = availableWords[Math.floor(Math.random() * availableWords.length)];
             const targetLeftChar = currentSuggestedWord[0].toUpperCase();
             const targetRightChar = currentSuggestedWord[currentSuggestedWord.length - 1].toUpperCase();
 
-            // Start the timer
-            startTimer();
+            startTimer(); // Start the timer
 
-            // Spin both wheels concurrently, ensuring they land on the selected word's letters
             await Promise.all([
                 spinWheel(leftWheel, targetLeftChar),
                 spinWheel(rightWheel, targetRightChar)
             ]);
 
-            isSpinningLeft = false; // Reset spin flags
+            isSpinningLeft = false;
             isSpinningRight = false;
-            onSpinComplete(); // Trigger completion logic
+            onSpinComplete();
         });
 
         revealWordBtn.addEventListener('click', () => {
-            wordSuggestionDiv.classList.remove('opacity-0'); // Make the word visible
+            wordSuggestionDiv.classList.remove('hidden-word'); // Make the word visible
             revealWordBtn.style.display = 'none'; // Hide the reveal button
             showMessage("Word revealed!", 1500);
         });
 
         // --- Initialization ---
         window.onload = () => {
-            // Set initial difficulty to 'easy'
             difficultySelector.value = 'easy';
-
-            // Initial display of letters and timer
-            leftWheel.textContent = 'S'; // Initial letters for display
+            leftWheel.textContent = 'S';
             rightWheel.textContent = 'P';
             timerDisplay.textContent = '10';
-            toggleButtons(true); // Ensure spin button and difficulty selector are enabled on load
-            revealWordBtn.style.display = 'none'; // Ensure reveal button is hidden on load
-            wordSuggestionDiv.textContent = 'Spin the wheels to find a word!'; // Initial message
-            wordSuggestionDiv.classList.remove('opacity-0'); // Make initial message visible on load
+            toggleButtons(true); // Ensure spin button and difficulty selector are enabled
+            revealWordBtn.style.display = 'none'; // Ensure reveal button is hidden
+            wordSuggestionDiv.textContent = ''; // Ensure no default text is visible
+            wordSuggestionDiv.classList.add('hidden-word'); // Ensure word suggestion is always hidden initially
+
+            showMessage("Spin the wheels to find a word!", 3000); // Initial instruction message
         };
     </script>
 </body>
