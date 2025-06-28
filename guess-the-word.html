@@ -430,8 +430,8 @@
         function onSpinComplete() {
             if (!isSpinningLeft && !isSpinningRight) {
                 if (currentSuggestedWord) {
+                    // Set the text content, but the element will remain hidden due to 'hidden-word' class
                     wordSuggestionDiv.textContent = `Word: ${currentSuggestedWord.toUpperCase()}!`;
-                    wordSuggestionDiv.classList.add('hidden-word'); // Ensure it stays hidden
                     revealWordBtn.style.display = 'block'; // Show the reveal button
                 } else {
                     wordSuggestionDiv.textContent = `No words found for the selected difficulty. Try a different level.`;
@@ -440,7 +440,6 @@
                     showMessage("No words found for this difficulty.", 3000);
                 }
                 toggleButtons(true); // Re-enable main spin button and difficulty selector
-                resetTimer(); // Reset timer for next round
             }
         }
 
@@ -467,7 +466,7 @@
                 isSpinningLeft = false;
                 isSpinningRight = false;
                 showMessage("No words available for this difficulty.", 4000);
-                resetTimer();
+                resetTimer(); // Reset timer only if no words are found and spin didn't complete
                 return;
             }
 
@@ -475,8 +474,7 @@
             const targetLeftChar = currentSuggestedWord[0].toUpperCase();
             const targetRightChar = currentSuggestedWord[currentSuggestedWord.length - 1].toUpperCase();
 
-            startTimer(); // Start the timer
-
+            // Wait for both wheels to finish spinning
             await Promise.all([
                 spinWheel(leftWheel, targetLeftChar),
                 spinWheel(rightWheel, targetRightChar)
@@ -484,6 +482,9 @@
 
             isSpinningLeft = false;
             isSpinningRight = false;
+
+            // Timer starts HERE, immediately after wheels have stopped and letters are rendered
+            startTimer();
             onSpinComplete();
         });
 
