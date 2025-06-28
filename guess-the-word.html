@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spinning Wheel Word Game</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow: hidden; /* Prevent scrollbar from animation */
+        }
+
+        .game-container {
+            background-color: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            max-width: 90%;
+            width: 700px; /* Max width for larger screens */
+        }
+
+        .wheels-and-timer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            gap: 20px; /* Space between wheels and timer */
+        }
+
+        .wheel-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wheel {
+            width: 150px;
+            height: 150px;
+            border: 8px solid #4ade80; /* Green border */
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4rem;
+            font-weight: bold;
+            color: #16a34a; /* Darker green for text */
+            background-color: #d1fae5; /* Lighter green background */
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1), 0 5px 15px rgba(0, 0, 0, 0.15);
+            transition: transform 0.1s ease-out; /* For subtle bounce effect */
+        }
+
+        .timer {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #f97316; /* Orange for timer */
+            background-color: #fff7ed;
+            border: 4px solid #fdbf6f; /* Lighter orange border */
+            border-radius: 10px;
+            padding: 10px 20px;
+            min-width: 120px; /* Ensure consistent width */
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .difficulty-selector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px; /* Space below selector */
+        }
+
+        .difficulty-selector label {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #475569; /* Gray-blue text */
+        }
+
+        .difficulty-selector select {
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 2px solid #cbd5e1; /* Light gray border */
+            background-color: #f8fafc; /* Lighter background */
+            font-size: 1rem;
+            color: #334155; /* Darker text */
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .difficulty-selector select:focus {
+            border-color: #3b82f6; /* Blue on focus */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3); /* Soft blue shadow */
+        }
+
+        .buttons-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+            justify-content: center;
+        }
+
+        .spin-button {
+            background-image: linear-gradient(to right, #60a5fa, #3b82f6); /* Blue gradient */
+            color: white;
+            padding: 14px 28px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease-in-out;
+            outline: none; /* Remove outline on focus */
+        }
+
+        .spin-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .spin-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            background-image: linear-gradient(to right, #3b82f6, #2563eb);
+        }
+
+        .word-suggestion {
+            margin-top: 20px;
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #059669; /* Green for word suggestion */
+            text-align: center;
+            min-height: 50px; /* Reserve space */
+        }
+
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            font-size: 1.1rem;
+        }
+
+        .message-box.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 640px) {
+            .wheel {
+                width: 120px;
+                height: 120px;
+                font-size: 3rem;
+            }
+
+            .timer {
+                font-size: 2.5rem;
+                padding: 8px 15px;
+                min-width: 100px;
+            }
+
+            .wheels-and-timer {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .buttons-container {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .spin-button {
+                width: 80%; /* Make buttons wider on small screens */
+                padding: 12px 20px;
+                font-size: 1.1rem;
+            }
+
+            .game-container {
+                padding: 20px;
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="text-4xl font-bold text-gray-800 mb-4">Spin-a-Word Game!</h1>
+
+        <div class="wheels-and-timer">
+            <div class="wheel-wrapper">
+                <div id="leftWheel" class="wheel">A</div>
+                <span class="text-lg text-gray-600">1st Alphabet</span>
+            </div>
+
+            <div id="timerDisplay" class="timer">10</div>
+
+            <div class="wheel-wrapper">
+                <div id="rightWheel" class="wheel">Z</div>
+                <span class="text-lg text-gray-600">Last Alphabet</span>
+            </div>
+        </div>
+
+        <div class="difficulty-selector">
+            <label for="difficulty">Difficulty Level:</label>
+            <select id="difficulty">
+                <option value="easy">Easy (Up to 5 letters)</option>
+                <option value="medium">Medium (6-8 letters)</option>
+                <option value="hard">Hard (9+ letters)</option>
+            </select>
+        </div>
+
+        <div id="wordSuggestion" class="word-suggestion opacity-0 transition-opacity duration-500">
+            <!-- Word will appear here -->
+        </div>
+        <button id="revealWordBtn" class="spin-button" style="display:none;">Reveal Word</button>
+
+        <div class="buttons-container">
+            <button id="spinBtn" class="spin-button">Spin Wheels</button>
+        </div>
+    </div>
+
+    <div id="messageBox" class="message-box"></div>
+
+    <script>
+        const dictionary = [
+            "apple", "apricot", "alligator", "aardvark", "arrow", "amazing", "amaze", "active", "acquire",
+            "banana", "basket", "bubble", "bear", "boat", "breeze", "bright", "build", "brave", "basic",
+            "cat", "car", "cloud", "cup", "cake", "charm", "clean", "climb", "crazy", "create",
+            "dog", "door", "duck", "dream", "dirt", "dazzle", "deep", "delight", "design", "daring",
+            "elephant", "egg", "eagle", "earth", "end", "enjoy", "epic", "easy", "elegant", "energy",
+            "fan", "fox", "flower", "fire", "fish", "fancy", "fast", "fearless", "find", "fluffy",
+            "grape", "giraffe", "garden", "gold", "gum", "gentle", "grand", "great", "grow", "gleam",
+            "house", "hat", "happy", "hand", "hero", "honest", "hope", "huge", "humble", "hungry",
+            "igloo", "ice", "ink", "iron", "idea", "imagine", "impress", "innovate", "inspire", "insight",
+            "jacket", "jelly", "juice", "jump", "jar", "jolly", "journey", "joyful", "jungle", "just",
+            "kite", "key", "king", "kitchen", "kettle", "keen", "kind", "knack", "kudos", "keep",
+            "lemon", "lion", "light", "leaf", "ladder", "large", "laugh", "learn", "legend", "lively",
+            "monkey", "moon", "milk", "mouse", "magic", "main", "major", "master", "meadow", "melon",
+            "nut", "nest", "night", "nose", "nail", "natural", "neat", "nice", "noble", "now",
+            "orange", "owl", "ocean", "open", "oval", "observe", "obtain", "occasion", "offer", "old",
+            "pencil", "pear", "pig", "pink", "plant", "perfect", "play", "polite", "proud", "pure",
+            "queen", "quilt", "quick", "quiet", "quack", "quality", "quest", "quaint", "quibble", "quote",
+            "rabbit", "rain", "rose", "river", "ring", "radiant", "rapid", "reach", "relax", "ready",
+            "sun", "star", "snake", "shoe", "spoon", "safe", "shine", "simple", "smart", "soft",
+            "tree", "train", "table", "tiger", "tooth", "talented", "tasty", "teach", "terrific", "thought",
+            "umbrella", "unicycle", "up", "unicorn", "urge", "unique", "united", "unreal", "usher", "utmost",
+            "van", "vase", "violin", "violet", "vote", "valuable", "vast", "venture", "vibrant", "victory",
+            "whale", "water", "window", "wood", "wave", "warm", "wise", "wonder", "worth", "weave",
+            "xylophone", "xray", "xenon", "xebec",
+            "yak", "yellow", "yarn", "yacht", "yoga", "yearn", "youth", "yummy", "yelp", "yield",
+            "zebra", "zero", "zigzag", "zoo", "zest", "zephyr", "zing", "zillion", "zone", "zoom"
+        ];
+
+        const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const letters = alphabet.split('');
+
+        const leftWheel = document.getElementById('leftWheel');
+        const rightWheel = document.getElementById('rightWheel');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const wordSuggestionDiv = document.getElementById('wordSuggestion');
+        const spinBtn = document.getElementById('spinBtn');
+        const revealWordBtn = document.getElementById('revealWordBtn');
+        const difficultySelector = document.getElementById('difficulty'); // New difficulty selector
+        const messageBox = document.getElementById('messageBox');
+
+        let timerInterval;
+        let timeLeft = 10;
+        let isSpinningLeft = false;
+        let isSpinningRight = false;
+        let currentSuggestedWord = '';
+
+        // --- Utility Functions ---
+
+        /**
+         * Displays a temporary message to the user.
+         * @param {string} message - The message to display.
+         * @param {number} duration - How long the message should be visible in milliseconds.
+         */
+        function showMessage(message, duration = 2000) {
+            messageBox.textContent = message;
+            messageBox.classList.add('show');
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+
+        /**
+         * Filters the dictionary based on the selected difficulty level (word length).
+         * @param {string} difficulty - The selected difficulty ('easy', 'medium', 'hard').
+         * @returns {Array<string>} An array of words matching the difficulty criteria.
+         */
+        function getWordsByDifficulty(difficulty) {
+            switch (difficulty) {
+                case 'easy':
+                    return dictionary.filter(word => word.length <= 5);
+                case 'medium':
+                    return dictionary.filter(word => word.length >= 6 && word.length <= 8);
+                case 'hard':
+                    return dictionary.filter(word => word.length >= 9);
+                default:
+                    return dictionary; // Fallback to all words if something goes wrong
+            }
+        }
+
+        // --- Game Logic ---
+
+        /**
+         * Initiates the spinning animation for a given wheel, landing on a specific target letter.
+         * @param {HTMLElement} wheelElement - The DOM element of the wheel to spin.
+         * @param {string} targetLetter - The specific letter the wheel must land on.
+         * @returns {Promise<string>} A promise that resolves with the final letter the wheel landed on.
+         */
+        function spinWheel(wheelElement, targetLetter) {
+            return new Promise(resolve => {
+                const spinDuration = 1500; // Total spin duration in milliseconds (1.5 seconds)
+                const startTime = performance.now();
+                let animationFrameId;
+
+                /**
+                 * The core animation loop using requestAnimationFrame.
+                 * @param {DOMHighResTimeStamp} currentTime - The current time provided by requestAnimationFrame.
+                 */
+                function animateSpin(currentTime) {
+                    const elapsedTime = currentTime - startTime;
+
+                    if (elapsedTime < spinDuration) {
+                        // Rapidly change letters for the main duration of the spin
+                        // Change letter approximately every 50ms for a visual spinning effect
+                        if (Math.floor(elapsedTime / 50) % 2 === 0) {
+                            wheelElement.textContent = letters[Math.floor(Math.random() * letters.length)];
+                        }
+
+                        // Subtle scale effect to simulate movement/bounce
+                        wheelElement.style.transform = `scale(${1.0 + (Math.sin(elapsedTime / 100) * 0.02)})`;
+
+                        animationFrameId = requestAnimationFrame(animateSpin);
+                    } else {
+                        // Ensure it lands precisely on the target letter and reset its style
+                        wheelElement.textContent = targetLetter;
+                        wheelElement.style.transform = 'scale(1.0)';
+                        resolve(targetLetter); // Resolve the promise with the final letter
+                    }
+                }
+                animationFrameId = requestAnimationFrame(animateSpin); // Start the animation loop
+            });
+        }
+
+
+        /**
+         * Starts the countdown timer.
+         */
+        function startTimer() {
+            timeLeft = 10;
+            timerDisplay.textContent = timeLeft;
+            clearInterval(timerInterval); // Clear any existing timer
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    timerDisplay.textContent = '0';
+                    showMessage("Time's up! Spin again!", 3000);
+                }
+            }, 1000);
+        }
+
+        /**
+         * Resets the timer to 10 seconds.
+         */
+        function resetTimer() {
+            clearInterval(timerInterval);
+            timeLeft = 10;
+            timerDisplay.textContent = timeLeft;
+        }
+
+        /**
+         * Enables/disables all game buttons.
+         * @param {boolean} enable - True to enable, false to disable.
+         */
+        function toggleButtons(enable) {
+            spinBtn.disabled = !enable; // Only control the single spin button
+            difficultySelector.disabled = !enable; // Disable difficulty selector during spin
+            if (enable) {
+                spinBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                difficultySelector.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                spinBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                difficultySelector.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        /**
+         * Handles the completion of a spin operation.
+         * Checks if both wheels have stopped and updates the word suggestion.
+         */
+        function onSpinComplete() {
+            if (!isSpinningLeft && !isSpinningRight) {
+                // The currentSuggestedWord is already set in the spinBtn click handler
+                // because we choose the word *before* spinning the wheels.
+                if (currentSuggestedWord) {
+                    wordSuggestionDiv.textContent = `Word: ${currentSuggestedWord.toUpperCase()}!`;
+                    wordSuggestionDiv.classList.add('opacity-0'); // Keep hidden
+                    revealWordBtn.style.display = 'block'; // Show the reveal button
+                } else {
+                    wordSuggestionDiv.textContent = `No words found for the selected difficulty. Try a different level.`;
+                    wordSuggestionDiv.classList.remove('opacity-0'); // Show error message immediately
+                    revealWordBtn.style.display = 'none'; // Ensure reveal button is hidden
+                    showMessage("No words found for this difficulty.", 3000);
+                }
+                toggleButtons(true); // Re-enable main spin button and difficulty selector
+                resetTimer(); // Reset timer for next round
+            }
+        }
+
+        // --- Event Listeners ---
+        spinBtn.addEventListener('click', async () => {
+            if (isSpinningLeft || isSpinningRight) return; // Prevent multiple spins if already in progress
+
+            isSpinningLeft = true; // Set both flags to true as both wheels will spin
+            isSpinningRight = true;
+            toggleButtons(false); // Disable spin button and difficulty selector during spin
+            revealWordBtn.style.display = 'none'; // Hide reveal button
+            wordSuggestionDiv.classList.add('opacity-0'); // Ensure word is hidden
+            wordSuggestionDiv.textContent = 'Spinning wheels...'; // Display spinning message
+
+            const selectedDifficulty = difficultySelector.value;
+            const availableWords = getWordsByDifficulty(selectedDifficulty);
+
+            if (availableWords.length === 0) {
+                wordSuggestionDiv.textContent = `No words found for '${selectedDifficulty}' difficulty. Please choose another level.`;
+                wordSuggestionDiv.classList.remove('opacity-0');
+                toggleButtons(true);
+                isSpinningLeft = false;
+                isSpinningRight = false;
+                showMessage("No words available for this difficulty.", 4000);
+                resetTimer();
+                return;
+            }
+
+            // Select a random word from the filtered dictionary
+            currentSuggestedWord = availableWords[Math.floor(Math.random() * availableWords.length)];
+            const targetLeftChar = currentSuggestedWord[0].toUpperCase();
+            const targetRightChar = currentSuggestedWord[currentSuggestedWord.length - 1].toUpperCase();
+
+            // Start the timer
+            startTimer();
+
+            // Spin both wheels concurrently, ensuring they land on the selected word's letters
+            await Promise.all([
+                spinWheel(leftWheel, targetLeftChar),
+                spinWheel(rightWheel, targetRightChar)
+            ]);
+
+            isSpinningLeft = false; // Reset spin flags
+            isSpinningRight = false;
+            onSpinComplete(); // Trigger completion logic
+        });
+
+        revealWordBtn.addEventListener('click', () => {
+            wordSuggestionDiv.classList.remove('opacity-0'); // Make the word visible
+            revealWordBtn.style.display = 'none'; // Hide the reveal button
+            showMessage("Word revealed!", 1500);
+        });
+
+        // --- Initialization ---
+        window.onload = () => {
+            // Set initial difficulty to 'easy'
+            difficultySelector.value = 'easy';
+
+            // Initial display of letters and timer
+            leftWheel.textContent = 'S'; // Initial letters for display
+            rightWheel.textContent = 'P';
+            timerDisplay.textContent = '10';
+            toggleButtons(true); // Ensure spin button and difficulty selector are enabled on load
+            revealWordBtn.style.display = 'none'; // Ensure reveal button is hidden on load
+            wordSuggestionDiv.textContent = 'Spin the wheels to find a word!'; // Initial message
+            wordSuggestionDiv.classList.remove('opacity-0'); // Make initial message visible
+        };
+    </script>
+</body>
+</html>
