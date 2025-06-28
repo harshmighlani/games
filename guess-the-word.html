@@ -426,7 +426,9 @@
                 // because we choose the word *before* spinning the wheels.
                 if (currentSuggestedWord) {
                     wordSuggestionDiv.textContent = `Word: ${currentSuggestedWord.toUpperCase()}!`;
-                    wordSuggestionDiv.classList.add('opacity-0'); // Keep hidden
+                    // Now, immediately hide the content and show the reveal button.
+                    // The transition will apply from this point.
+                    wordSuggestionDiv.classList.add('opacity-0');
                     revealWordBtn.style.display = 'block'; // Show the reveal button
                 } else {
                     wordSuggestionDiv.textContent = `No words found for the selected difficulty. Try a different level.`;
@@ -447,7 +449,9 @@
             isSpinningRight = true;
             toggleButtons(false); // Disable spin button and difficulty selector during spin
             revealWordBtn.style.display = 'none'; // Hide reveal button
-            wordSuggestionDiv.classList.add('opacity-0'); // Ensure word is hidden
+            
+            // Ensure wordSuggestionDiv is visible to show "Spinning wheels..." message
+            wordSuggestionDiv.classList.remove('opacity-0'); 
             wordSuggestionDiv.textContent = 'Spinning wheels...'; // Display spinning message
 
             const selectedDifficulty = difficultySelector.value;
@@ -501,7 +505,7 @@
             toggleButtons(true); // Ensure spin button and difficulty selector are enabled on load
             revealWordBtn.style.display = 'none'; // Ensure reveal button is hidden on load
             wordSuggestionDiv.textContent = 'Spin the wheels to find a word!'; // Initial message
-            wordSuggestionDiv.classList.remove('opacity-0'); // Make initial message visible
+            wordSuggestionDiv.classList.remove('opacity-0'); // Make initial message visible on load
         };
     </script>
 </body>
