@@ -124,33 +124,6 @@
             // Ref for the timetable grid element to capture for PDF
             const timetableRef = React.useRef(null);
 
-            // useEffect to dynamically load html2canvas and jsPDF CDN scripts
-            React.useEffect(() => {
-                const loadScript = (src, id) => {
-                    if (document.getElementById(id)) return; // Script already exists
-
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.id = id;
-                    script.async = true;
-                    document.head.appendChild(script);
-                    return script;
-                };
-
-                const html2canvasScript = loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas-script');
-                const jspdfScript = loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jspdf-script');
-
-                // Cleanup function to remove scripts if component unmounts
-                return () => {
-                    if (html2canvasScript && document.head.contains(html2canvasScript)) {
-                        document.head.removeChild(html2canvasScript);
-                    }
-                    if (jspdfScript && document.head.contains(jspdfScript)) {
-                        document.head.removeChild(jspdfScript);
-                    }
-                };
-            }, []); // Empty dependency array means this runs once on mount
-
             // Handle drag start from activity palette
             const handleDragStartPalette = (e, activityId) => {
                 draggedItem.current = { id: activityId, source: 'palette', originalDay: null, originalTime: null };
