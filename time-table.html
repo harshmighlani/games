@@ -1,471 +1,546 @@
-import React, { useState, useEffect, useRef } from 'react';
-
-// Main App Component
-const App = () => {
-    // Define days of the week and time slots
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const timeSlots = [];
-    for (let i = 7; i <= 20; i++) { // 7 AM to 8 PM
-        timeSlots.push(`${i}:00 AM`);
-        if (i < 20) timeSlots.push(`${i}:30 AM`);
-    }
-    // Adjust AM/PM for clarity
-    const formattedTimeSlots = timeSlots.map(slot => {
-        const [hourStr, minuteStr] = slot.split(':');
-        let hour = parseInt(hourStr);
-        const minutes = minuteStr.split(' ')[0];
-        let ampm = 'AM';
-
-        if (hour >= 12) {
-            ampm = 'PM';
-            if (hour > 12) hour -= 12;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Holiday Timetable</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden; /* Prevent horizontal scroll on body */
         }
-        if (hour === 0) hour = 12; // Midnight case
-
-        return `${hour}:${minutes} ${ampm}`;
-    });
-
-    // State for all available activities
-    const [activities, setActivities] = useState([
-        { id: 'a1', name: 'Breakfast', color: '#FFDDC1' },
-        { id: 'a2', name: 'Outdoor Play', color: '#C1FFD1' },
-        { id: 'a3', name: 'Reading', color: '#D1C1FF' },
-        { id: 'a4', name: 'Maths Games', color: '#FFFDC1' },
-        { id: 'a5', name: 'Creative Time', color: '#FFC1F1' },
-        { id: 'a6', name: 'Lunch', color: '#C1FFFF' },
-        { id: 'a7', name: 'Family Outing', color: '#FFC1C1' },
-        { id: 'a8', name: 'Downtime', color: '#E0E0E0' },
-        { id: 'a9', name: 'Dinner', color: '#FFD1C1' },
-        { id: 'a10', name: 'Bedtime Routine', color: '#C1D1FF' },
-        { id: 'a11', name: 'Chores', color: '#D1FFC1' },
-        { id: 'a12', name: 'Free Play', color: '#F1C1FF' },
-    ]);
-
-    // State for the timetable grid: timetable[dayIndex][timeSlotIndex] = activityId
-    const [timetable, setTimetable] = useState(() => {
-        const initialTimetable = Array(days.length).fill(null).map(() =>
-            Array(formattedTimeSlots.length).fill(null)
-        );
-        return initialTimetable;
-    });
-
-    // State for the activity modal
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingActivity, setEditingActivity] = useState(null); // Activity object if editing, null if adding new
-    const [modalDayIndex, setModalDayIndex] = useState(null); // Day index if editing from grid
-    const [modalTimeSlotIndex, setModalTimeSlotIndex] = useState(null); // Time slot index if editing from grid
-
-    // Ref to store the currently dragged activity's ID and source (palette or grid)
-    const draggedItem = useRef({ id: null, source: null, originalDay: null, originalTime: null });
-
-    // Ref for the timetable grid element to capture for PDF
-    const timetableRef = useRef(null);
-
-    // useEffect to dynamically load html2canvas and jsPDF CDN scripts
-    useEffect(() => {
-        const loadScript = (src, id) => {
-            if (document.getElementById(id)) return; // Script already exists
-
-            const script = document.createElement('script');
-            script.src = src;
-            script.id = id;
-            script.async = true;
-            document.head.appendChild(script);
-            return script;
-        };
-
-        const html2canvasScript = loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas-script');
-        const jspdfScript = loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jspdf-script');
-
-        // Cleanup function to remove scripts if component unmounts
-        return () => {
-            if (html2canvasScript && document.head.contains(html2canvasScript)) {
-                document.head.removeChild(html2canvasScript);
-            }
-            if (jspdfScript && document.head.contains(jspdfScript)) {
-                document.head.removeChild(jspdfScript);
-            }
-        };
-    }, []); // Empty dependency array means this runs once on mount
-
-    // Handle drag start from activity palette
-    const handleDragStartPalette = (e, activityId) => {
-        draggedItem.current = { id: activityId, source: 'palette', originalDay: null, originalTime: null };
-        e.dataTransfer.setData('text/plain', activityId); // Fallback for some browsers
-        e.dataTransfer.effectAllowed = 'copyMove';
-    };
-
-    // Handle drag start from timetable grid
-    const handleDragStartGrid = (e, activityId, dayIdx, timeSlotIdx) => {
-        draggedItem.current = { id: activityId, source: 'grid', originalDay: dayIdx, originalTime: timeSlotIdx };
-        e.dataTransfer.setData('text/plain', activityId); // Fallback
-        e.dataTransfer.effectAllowed = 'copyMove';
-    };
-
-    // Allow dropping on grid cells
-    const handleDragOver = (e) => {
-        e.preventDefault(); // Necessary to allow drop
-        e.dataTransfer.dropEffect = 'copyMove';
-    };
-
-    // Handle drop onto a grid cell
-    const handleDrop = (e, dayIdx, timeSlotIdx) => {
-        e.preventDefault();
-        const activityId = draggedItem.current.id;
-        const source = draggedItem.current.source;
-        const originalDay = draggedItem.current.originalDay;
-        const originalTime = draggedItem.current.originalTime;
-
-        if (!activityId) return;
-
-        setTimetable(prevTimetable => {
-            const newTimetable = [...prevTimetable.map(row => [...row])]; // Deep copy
-
-            // Clear the original cell if dragging from the grid
-            if (source === 'grid' && originalDay !== null && originalTime !== null) {
-                newTimetable[originalDay][originalTime] = null;
-            }
-
-            // Place the activity in the new cell
-            newTimetable[dayIdx][timeSlotIdx] = activityId;
-            return newTimetable;
-        });
-
-        // Reset dragged item ref
-        draggedItem.current = { id: null, source: null, originalDay: null, originalTime: null };
-    };
-
-    // Open modal to add a new activity
-    const handleAddActivityClick = () => {
-        setEditingActivity(null); // No activity being edited
-        setModalDayIndex(null);
-        setModalTimeSlotIndex(null);
-        setIsModalOpen(true);
-    };
-
-    // Open modal to edit an existing activity (from palette)
-    const handleEditActivityPalette = (activity) => {
-        setEditingActivity(activity);
-        setModalDayIndex(null);
-        setModalTimeSlotIndex(null);
-        setIsModalOpen(true);
-    };
-
-    // Open modal to edit an activity already on the grid
-    const handleEditActivityGrid = (activityId, dayIdx, timeSlotIdx) => {
-        const activity = activities.find(a => a.id === activityId);
-        if (activity) {
-            setEditingActivity(activity);
-            setModalDayIndex(dayIdx);
-            setModalTimeSlotIndex(timeSlotIdx);
-            setIsModalOpen(true);
+        /* Ensure sticky headers work within overflow-x-auto */
+        .sticky-header-wrapper {
+            position: relative;
         }
-    };
-
-    // Save/Update activity from modal
-    const handleSaveActivity = (newActivity) => {
-        if (newActivity.id) { // Editing existing activity
-            setActivities(prevActivities =>
-                prevActivities.map(a => (a.id === newActivity.id ? newActivity : a))
-            );
-        } else { // Adding new activity
-            setActivities(prevActivities => [
-                ...prevActivities,
-                { ...newActivity, id: `a${Date.now()}` } // Generate unique ID
-            ]);
+        .sticky.left-0 {
+            position: sticky;
+            left: 0;
+            z-index: 10; /* Ensure it's above other table cells */
         }
-        setIsModalOpen(false);
-    };
+        /* Adjust table layout for better responsiveness if needed */
+        table {
+            border-collapse: collapse;
+        }
+        th, td {
+            min-width: 100px; /* Ensure cells have a minimum width */
+        }
+        /* Custom scrollbar for better aesthetics */
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-    // Delete activity from modal
-    const handleDeleteActivity = (activityId) => {
-        // Remove from activities list
-        setActivities(prevActivities => prevActivities.filter(a => a.id !== activityId));
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation in browser (for development only, use build step for production) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        // Remove from timetable grid
-        setTimetable(prevTimetable => {
-            const newTimetable = [...prevTimetable.map(row => [...row])];
-            for (let i = 0; i < newTimetable.length; i++) {
-                for (let j = 0; j < newTimetable[i].length; j++) {
-                    if (newTimetable[i][j] === activityId) {
-                        newTimetable[i][j] = null;
-                    }
+    <!-- html2canvas and jsPDF CDNs for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script type="text/babel">
+        // Your React App component code goes here
+        // It's important that the App component is defined before ReactDOM.createRoot(rootElement).render() is called
+        // Paste the entire content of your App.js (or the React component you provided) here.
+
+        // Removed: import React, { useState, useEffect, useRef } from 'react';
+        // React and its hooks (useState, useEffect, useRef) are available globally via CDN scripts
+
+        // Main App Component
+        const App = () => {
+            // Define days of the week and time slots
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+            const timeSlots = [];
+            for (let i = 7; i <= 20; i++) { // 7 AM to 8 PM
+                timeSlots.push(`${i}:00 AM`);
+                if (i < 20) timeSlots.push(`${i}:30 AM`);
+            }
+            // Adjust AM/PM for clarity
+            const formattedTimeSlots = timeSlots.map(slot => {
+                const [hourStr, minuteStr] = slot.split(':');
+                let hour = parseInt(hourStr);
+                const minutes = minuteStr.split(' ')[0];
+                let ampm = 'AM';
+
+                if (hour >= 12) {
+                    ampm = 'PM';
+                    if (hour > 12) hour -= 12;
                 }
-            }
-            return newTimetable;
-        });
-        setIsModalOpen(false);
-    };
+                if (hour === 0) hour = 12; // Midnight case
 
-    // Clear a specific cell on the grid (e.g., if user wants to remove an activity from a slot)
-    const handleClearCell = (dayIdx, timeSlotIdx) => {
-        setTimetable(prevTimetable => {
-            const newTimetable = [...prevTimetable.map(row => [...row])];
-            newTimetable[dayIdx][timeSlotIdx] = null;
-            return newTimetable;
-        });
-    };
+                return `${hour}:${minutes} ${ampm}`;
+            });
 
-    // Handle PDF export
-    const handleExportPdf = () => {
-        if (timetableRef.current) {
-            // Check if html2canvas and jsPDF are available globally
-            if (typeof window.html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
-                console.error('html2canvas or jsPDF not loaded. Please ensure their CDN links are included.');
-                // In a real app, you would show a user-friendly message here.
-                return;
-            }
+            // State for all available activities
+            const [activities, setActivities] = React.useState([
+                { id: 'a1', name: 'Breakfast', color: '#FFDDC1' },
+                { id: 'a2', name: 'Outdoor Play', color: '#C1FFD1' },
+                { id: 'a3', name: 'Reading', color: '#D1C1FF' },
+                { id: 'a4', name: 'Maths Games', color: '#FFFDC1' },
+                { id: 'a5', name: 'Creative Time', color: '#FFC1F1' },
+                { id: 'a6', name: 'Lunch', color: '#C1FFFF' },
+                { id: 'a7', name: 'Family Outing', color: '#FFC1C1' },
+                { id: 'a8', name: 'Downtime', color: '#E0E0E0' },
+                { id: 'a9', name: 'Dinner', color: '#FFD1C1' },
+                { id: 'a10', name: 'Bedtime Routine', color: '#C1D1FF' },
+                { id: 'a11', name: 'Chores', color: '#D1FFC1' },
+                { id: 'a12', name: 'Free Play', color: '#F1C1FF' },
+            ]);
 
-            // Temporarily adjust styles for better PDF rendering
-            const originalOverflow = timetableRef.current.style.overflowX;
-            const originalMinW = timetableRef.current.style.minWidth;
-            timetableRef.current.style.overflowX = 'visible'; // Ensure all content is visible
-            timetableRef.current.style.minWidth = 'fit-content'; // Prevent horizontal scrollbar issues
+            // State for the timetable grid: timetable[dayIndex][timeSlotIndex] = activityId
+            const [timetable, setTimetable] = React.useState(() => {
+                const initialTimetable = Array(days.length).fill(null).map(() =>
+                    Array(formattedTimeSlots.length).fill(null)
+                );
+                return initialTimetable;
+            });
 
-            html2canvas(timetableRef.current, {
-                scale: 2, // Increase scale for better resolution in PDF
-                useCORS: true, // If you have external images, enable CORS
-            }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new window.jspdf.jsPDF({
-                    orientation: 'landscape', // Use landscape for wider timetable
-                    unit: 'px',
-                    format: 'a4'
+            // State for the activity modal
+            const [isModalOpen, setIsModalOpen] = React.useState(false);
+            const [editingActivity, setEditingActivity] = React.useState(null); // Activity object if editing, null if adding new
+            const [modalDayIndex, setModalDayIndex] = React.useState(null); // Day index if editing from grid
+            const [modalTimeSlotIndex, setModalTimeSlotIndex] = React.useState(null); // Time slot index if editing from grid
+
+            // Ref to store the currently dragged activity's ID and source (palette or grid)
+            const draggedItem = React.useRef({ id: null, source: null, originalDay: null, originalTime: null });
+
+            // Ref for the timetable grid element to capture for PDF
+            const timetableRef = React.useRef(null);
+
+            // useEffect to dynamically load html2canvas and jsPDF CDN scripts
+            React.useEffect(() => {
+                const loadScript = (src, id) => {
+                    if (document.getElementById(id)) return; // Script already exists
+
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.id = id;
+                    script.async = true;
+                    document.head.appendChild(script);
+                    return script;
+                };
+
+                const html2canvasScript = loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas-script');
+                const jspdfScript = loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jspdf-script');
+
+                // Cleanup function to remove scripts if component unmounts
+                return () => {
+                    if (html2canvasScript && document.head.contains(html2canvasScript)) {
+                        document.head.removeChild(html2canvasScript);
+                    }
+                    if (jspdfScript && document.head.contains(jspdfScript)) {
+                        document.head.removeChild(jspdfScript);
+                    }
+                };
+            }, []); // Empty dependency array means this runs once on mount
+
+            // Handle drag start from activity palette
+            const handleDragStartPalette = (e, activityId) => {
+                draggedItem.current = { id: activityId, source: 'palette', originalDay: null, originalTime: null };
+                e.dataTransfer.setData('text/plain', activityId); // Fallback for some browsers
+                e.dataTransfer.effectAllowed = 'copyMove';
+            };
+
+            // Handle drag start from timetable grid
+            const handleDragStartGrid = (e, activityId, dayIdx, timeSlotIdx) => {
+                draggedItem.current = { id: activityId, source: 'grid', originalDay: dayIdx, originalTime: timeSlotIdx };
+                e.dataTransfer.setData('text/plain', activityId); // Fallback
+                e.dataTransfer.effectAllowed = 'copyMove';
+            };
+
+            // Allow dropping on grid cells
+            const handleDragOver = (e) => {
+                e.preventDefault(); // Necessary to allow drop
+                e.dataTransfer.dropEffect = 'copyMove';
+            };
+
+            // Handle drop onto a grid cell
+            const handleDrop = (e, dayIdx, timeSlotIdx) => {
+                e.preventDefault();
+                const activityId = draggedItem.current.id;
+                const source = draggedItem.current.source;
+                const originalDay = draggedItem.current.originalDay;
+                const originalTime = draggedItem.current.originalTime;
+
+                if (!activityId) return;
+
+                setTimetable(prevTimetable => {
+                    const newTimetable = [...prevTimetable.map(row => [...row])]; // Deep copy
+
+                    // Clear the original cell if dragging from the grid
+                    if (source === 'grid' && originalDay !== null && originalTime !== null) {
+                        newTimetable[originalDay][originalTime] = null;
+                    }
+
+                    // Place the activity in the new cell
+                    newTimetable[dayIdx][timeSlotIdx] = activityId;
+                    return newTimetable;
                 });
 
-                const imgWidth = pdf.internal.pageSize.getWidth();
-                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                // Reset dragged item ref
+                draggedItem.current = { id: null, source: null, originalDay: null, originalTime: null };
+            };
 
-                pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
-                pdf.save('holiday_timetable.pdf');
+            // Open modal to add a new activity
+            const handleAddActivityClick = () => {
+                setEditingActivity(null); // No activity being edited
+                setModalDayIndex(null);
+                setModalTimeSlotIndex(null);
+                setIsModalOpen(true);
+            };
 
-                // Restore original styles
-                timetableRef.current.style.overflowX = originalOverflow;
-                timetableRef.current.style.minWidth = originalMinW;
-            }).catch(error => {
-                console.error('Error generating PDF:', error);
-                // Restore original styles in case of error
-                if (timetableRef.current) {
-                    timetableRef.current.style.overflowX = originalOverflow;
-                    timetableRef.current.style.minWidth = originalMinW;
+            // Open modal to edit an existing activity (from palette)
+            const handleEditActivityPalette = (activity) => {
+                setEditingActivity(activity);
+                setModalDayIndex(null);
+                setModalTimeSlotIndex(null);
+                setIsModalOpen(true);
+            };
+
+            // Open modal to edit an activity already on the grid
+            const handleEditActivityGrid = (activityId, dayIdx, timeSlotIdx) => {
+                const activity = activities.find(a => a.id === activityId);
+                if (activity) {
+                    setEditingActivity(activity);
+                    setModalDayIndex(dayIdx);
+                    setModalTimeSlotIndex(timeSlotIdx);
                 }
-            });
-        }
-    };
+                setIsModalOpen(true);
+            };
+
+            // Save/Update activity from modal
+            const handleSaveActivity = (newActivity) => {
+                if (newActivity.id) { // Editing existing activity
+                    setActivities(prevActivities =>
+                        prevActivities.map(a => (a.id === newActivity.id ? newActivity : a))
+                    );
+                } else { // Adding new activity
+                    setActivities(prevActivities => [
+                        ...prevActivities,
+                        { ...newActivity, id: `a${Date.now()}` } // Generate unique ID
+                    ]);
+                }
+                setIsModalOpen(false);
+            };
+
+            // Delete activity from modal
+            const handleDeleteActivity = (activityId) => {
+                // Remove from activities list
+                setActivities(prevActivities => prevActivities.filter(a => a.id !== activityId));
+
+                // Remove from timetable grid
+                setTimetable(prevTimetable => {
+                    const newTimetable = [...prevTimetable.map(row => [...row])];
+                    for (let i = 0; i < newTimetable.length; i++) {
+                        for (let j = 0; j < newTimetable[i].length; j++) {
+                            if (newTimetable[i][j] === activityId) {
+                                newTimetable[i][j] = null;
+                            }
+                        }
+                    }
+                    return newTimetable;
+                });
+                setIsModalOpen(false);
+            };
+
+            // Clear a specific cell on the grid (e.g., if user wants to remove an activity from a slot)
+            const handleClearCell = (dayIdx, timeSlotIdx) => {
+                setTimetable(prevTimetable => {
+                    const newTimetable = [...prevTimetable.map(row => [...row])];
+                    newTimetable[dayIdx][timeSlotIdx] = null;
+                    return newTimetable;
+                });
+            };
+
+            // Handle PDF export
+            const handleExportPdf = () => {
+                if (timetableRef.current) {
+                    // Check if html2canvas and jsPDF are available globally
+                    if (typeof window.html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+                        console.error('html2canvas or jsPDF not loaded. Please ensure their CDN links are included.');
+                        // In a real app, you would show a user-friendly message here.
+                        return;
+                    }
+
+                    // Temporarily adjust styles for better PDF rendering
+                    const originalOverflow = timetableRef.current.style.overflowX;
+                    const originalMinW = timetableRef.current.style.minWidth;
+                    timetableRef.current.style.overflowX = 'visible'; // Ensure all content is visible
+                    timetableRef.current.style.minWidth = 'fit-content'; // Prevent horizontal scrollbar issues
+
+                    html2canvas(timetableRef.current, {
+                        scale: 2, // Increase scale for better resolution in PDF
+                        useCORS: true, // If you have external images, enable CORS
+                    }).then(canvas => {
+                        const imgData = canvas.toDataURL('image/png');
+                        const pdf = new window.jspdf.jsPDF({
+                            orientation: 'landscape', // Use landscape for wider timetable
+                            unit: 'px',
+                            format: 'a4'
+                        });
+
+                        const imgWidth = pdf.internal.pageSize.getWidth();
+                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+                        pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+                        pdf.save('holiday_timetable.pdf');
+
+                        // Restore original styles
+                        timetableRef.current.style.overflowX = originalOverflow;
+                        timetableRef.current.style.minWidth = originalMinW;
+                    }).catch(error => {
+                        console.error('Error generating PDF:', error);
+                        // Restore original styles in case of error
+                        if (timetableRef.current) {
+                            timetableRef.current.style.overflowX = originalOverflow;
+                            timetableRef.current.style.minWidth = originalMinW;
+                        }
+                    });
+                }
+            };
 
 
-    return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-100 to-blue-200 p-6 font-inter text-gray-800">
-            <h1 className="text-4xl font-extrabold text-center text-purple-800 mb-8 drop-shadow-lg">
-                Holiday Timetable Creator
-            </h1>
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-purple-100 to-blue-200 p-6 font-inter text-gray-800">
+                    <h1 className="text-4xl font-extrabold text-center text-purple-800 mb-8 drop-shadow-lg">
+                        Holiday Timetable Creator
+                    </h1>
 
-            <div className="flex flex-col lg:flex-row gap-8">
-                {/* Activity Palette */}
-                <div className="lg:w-1/4 bg-white p-6 rounded-xl shadow-lg border border-purple-200">
-                    <h2 className="text-2xl font-bold text-purple-700 mb-4">Activities</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 mb-6">
-                        {activities.map(activity => (
-                            <div
-                                key={activity.id}
-                                draggable="true"
-                                onDragStart={(e) => handleDragStartPalette(e, activity.id)}
-                                onClick={() => handleEditActivityPalette(activity)}
-                                className="p-3 rounded-lg shadow-md cursor-grab active:cursor-grabbing transform transition-transform duration-150 hover:scale-105 flex items-center justify-between"
-                                style={{ backgroundColor: activity.color || '#E0E0E0' }}
-                            >
-                                <span className="font-semibold text-gray-800 text-sm">{activity.name}</span>
-                                {/* Small edit icon */}
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-600 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                            </div>
-                        ))}
-                    </div>
-                    <button
-                        onClick={handleAddActivityClick}
-                        className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg shadow-md hover:bg-purple-700 transition duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center text-lg font-semibold"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Add New Activity
-                    </button>
-                </div>
-
-                {/* Timetable Grid */}
-                <div className="lg:flex-1 overflow-x-auto bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-                    <h2 className="text-2xl font-bold text-blue-700 mb-4">Your Timetable</h2>
-                    <div ref={timetableRef} className="min-w-full inline-block align-middle">
-                        <table className="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg overflow-hidden">
-                            <thead className="bg-blue-100">
-                                <tr>
-                                    <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider w-[100px] sticky left-0 bg-blue-100 z-10">
-                                        Time
-                                    </th>
-                                    {days.map(day => (
-                                        <th
-                                            key={day}
-                                            scope="col"
-                                            className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider whitespace-nowrap"
-                                        >
-                                            {day}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {formattedTimeSlots.map((time, timeIdx) => (
-                                    <tr key={timeIdx}>
-                                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white border-r border-gray-200 z-10">
-                                            {time}
-                                        </td>
-                                        {days.map((day, dayIdx) => {
-                                            const activityId = timetable[dayIdx][timeIdx];
-                                            const activity = activities.find(a => a.id === activityId);
-                                            return (
-                                                <td
-                                                    key={`${dayIdx}-${timeIdx}`}
-                                                    onDragOver={handleDragOver}
-                                                    onDrop={(e) => handleDrop(e, dayIdx, timeIdx)}
-                                                    onClick={() => activityId && handleEditActivityGrid(activityId, dayIdx, timeIdx)}
-                                                    className={`px-2 py-2 border border-gray-200 text-center text-sm cursor-pointer transition-colors duration-150 ease-in-out
-                                                        ${activity ? 'hover:brightness-90' : 'hover:bg-gray-50'}
-                                                        ${activity ? 'relative group' : ''}
-                                                    `}
-                                                    style={{ backgroundColor: activity ? activity.color : 'transparent' }}
-                                                >
-                                                    {activity ? (
-                                                        <>
-                                                            <span className="block text-gray-800 font-medium text-xs sm:text-sm leading-tight">
-                                                                {activity.name}
-                                                            </span>
-                                                            {/* Clear button on hover */}
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation(); // Prevent opening edit modal
-                                                                    handleClearCell(dayIdx, timeIdx);
-                                                                }}
-                                                                className="absolute top-0 right-0 m-0.5 p-0.5 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                                                                title="Clear slot"
-                                                            >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                                                                </svg>
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-gray-400 text-xs italic">Drop activity</span>
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
+                    <div className="flex flex-col lg:flex-row gap-8">
+                        {/* Activity Palette */}
+                        <div className="lg:w-1/4 bg-white p-6 rounded-xl shadow-lg border border-purple-200">
+                            <h2 className="text-2xl font-bold text-purple-700 mb-4">Activities</h2>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 mb-6">
+                                {activities.map(activity => (
+                                    <div
+                                        key={activity.id}
+                                        draggable="true"
+                                        onDragStart={(e) => handleDragStartPalette(e, activity.id)}
+                                        onClick={() => handleEditActivityPalette(activity)}
+                                        className="p-3 rounded-lg shadow-md cursor-grab active:cursor-grabbing transform transition-transform duration-150 hover:scale-105 flex items-center justify-between"
+                                        style={{ backgroundColor: activity.color || '#E0E0E0' }}
+                                    >
+                                        <span className="font-semibold text-gray-800 text-sm">{activity.name}</span>
+                                        {/* Small edit icon */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-600 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
+                            </div>
+                            <button
+                                onClick={handleAddActivityClick}
+                                className="w-full bg-purple-600 text-white py-3 px-4 rounded-lg shadow-md hover:bg-purple-700 transition duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center text-lg font-semibold"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                Add New Activity
+                            </button>
+                        </div>
+
+                        {/* Timetable Grid */}
+                        <div className="lg:flex-1 overflow-x-auto bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                            <h2 className="text-2xl font-bold text-blue-700 mb-4">Your Timetable</h2>
+                            <div ref={timetableRef} className="min-w-full inline-block align-middle">
+                                <table className="min-w-full divide-y divide-gray-200 border border-gray-300 rounded-lg overflow-hidden">
+                                    <thead className="bg-blue-100">
+                                        <tr>
+                                            <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider w-[100px] sticky left-0 bg-blue-100 z-10">
+                                                Time
+                                            </th>
+                                            {days.map(day => (
+                                                <th
+                                                    key={day}
+                                                    scope="col"
+                                                    className="px-4 py-3 text-center text-xs font-medium text-gray-600 uppercase tracking-wider whitespace-nowrap"
+                                                >
+                                                    {day}
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        {formattedTimeSlots.map((time, timeIdx) => (
+                                            <tr key={timeIdx}>
+                                                <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 bg-white border-r border-gray-200 z-10">
+                                                    {time}
+                                                </td>
+                                                {days.map((day, dayIdx) => {
+                                                    const activityId = timetable[dayIdx][timeIdx];
+                                                    const activity = activities.find(a => a.id === activityId);
+                                                    return (
+                                                        <td
+                                                            key={`${dayIdx}-${timeIdx}`}
+                                                            onDragOver={handleDragOver}
+                                                            onDrop={(e) => handleDrop(e, dayIdx, timeIdx)}
+                                                            onClick={() => activityId && handleEditActivityGrid(activityId, dayIdx, timeIdx)}
+                                                            className={`px-2 py-2 border border-gray-200 text-center text-sm cursor-pointer transition-colors duration-150 ease-in-out
+                                                                ${activity ? 'hover:brightness-90' : 'hover:bg-gray-50'}
+                                                                ${activity ? 'relative group' : ''}
+                                                            `}
+                                                            style={{ backgroundColor: activity ? activity.color : 'transparent' }}
+                                                        >
+                                                            {activity ? (
+                                                                <>
+                                                                    <span className="block text-gray-800 font-medium text-xs sm:text-sm leading-tight">
+                                                                        {activity.name}
+                                                                    </span>
+                                                                    {/* Clear button on hover */}
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation(); // Prevent opening edit modal
+                                                                            handleClearCell(dayIdx, timeIdx);
+                                                                        }}
+                                                                        className="absolute top-0 right-0 m-0.5 p-0.5 rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                                        title="Clear slot"
+                                                                    >
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                                        </svg>
+                                                                    </button>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-gray-400 text-xs italic">Drop activity</span>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button
+                                onClick={handleExportPdf}
+                                className="mt-6 w-full bg-blue-600 text-white py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center text-lg font-semibold"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H5a2 2 0 01-2-2v-7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2z" />
+                                </svg>
+                                Export as PDF
+                            </button>
+                        </div>
                     </div>
-                    <button
-                        onClick={handleExportPdf}
-                        className="mt-6 w-full bg-blue-600 text-white py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 transition duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center text-lg font-semibold"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H5a2 2 0 01-2-2v-7a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2z" />
-                        </svg>
-                        Export as PDF
-                    </button>
-                </div>
-            </div>
 
-            {/* Activity Modal */}
-            {isModalOpen && (
-                <ActivityModal
-                    activity={editingActivity}
-                    onClose={() => setIsModalOpen(false)}
-                    onSave={handleSaveActivity}
-                    onDelete={handleDeleteActivity}
-                />
-            )}
-        </div>
-    );
-};
-
-// Activity Modal Component
-const ActivityModal = ({ activity, onClose, onSave, onDelete }) => {
-    const [name, setName] = useState(activity ? activity.name : '');
-    const [color, setColor] = useState(activity ? activity.color : '#FFDDC1'); // Default color
-
-    const handleSave = () => {
-        if (name.trim() === '') {
-            // In a real app, you'd show a user-friendly message, not alert.
-            console.error('Activity name cannot be empty.');
-            return;
-        }
-        onSave({ ...activity, name, color });
-    };
-
-    const handleDelete = () => {
-        if (activity && activity.id) {
-            onDelete(activity.id);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
-                <h2 className="text-2xl font-bold text-purple-700 mb-6">
-                    {activity ? 'Edit Activity' : 'Add New Activity'}
-                </h2>
-                <div className="mb-4">
-                    <label htmlFor="activityName" className="block text-gray-700 text-sm font-semibold mb-2">
-                        Activity Name:
-                    </label>
-                    <input
-                        type="text"
-                        id="activityName"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent transition duration-150"
-                        placeholder="e.g., Reading, Park Time"
-                    />
-                </div>
-                <div className="mb-6">
-                    <label htmlFor="activityColor" className="block text-gray-700 text-sm font-semibold mb-2">
-                        Choose Color:
-                    </label>
-                    <input
-                        type="color"
-                        id="activityColor"
-                        value={color}
-                        onChange={(e) => setColor(e.target.value)}
-                        className="w-full h-10 rounded-lg border border-gray-300 cursor-pointer"
-                    />
-                </div>
-                <div className="flex flex-col sm:flex-row justify-end gap-3">
-                    {activity && ( // Show delete button only if editing existing activity
-                        <button
-                            onClick={handleDelete}
-                            className="w-full sm:w-auto bg-red-500 text-white py-2 px-5 rounded-lg shadow-md hover:bg-red-600 transition duration-200 ease-in-out transform hover:scale-105 font-semibold"
-                        >
-                            Delete
-                        </button>
+                    {/* Activity Modal */}
+                    {isModalOpen && (
+                        <ActivityModal
+                            activity={editingActivity}
+                            onClose={() => setIsModalOpen(false)}
+                            onSave={handleSaveActivity}
+                            onDelete={handleDeleteActivity}
+                        />
                     )}
-                    <button
-                        onClick={onClose}
-                        className="w-full sm:w-auto bg-gray-300 text-gray-800 py-2 px-5 rounded-lg shadow-md hover:bg-gray-400 transition duration-200 ease-in-out transform hover:scale-105 font-semibold"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        className="w-full sm:w-auto bg-purple-600 text-white py-2 px-5 rounded-lg shadow-md hover:bg-purple-700 transition duration-200 ease-in-out transform hover:scale-105 font-semibold"
-                    >
-                        Save
-                    </button>
                 </div>
-            </div>
-        </div>
-    );
-};
+            );
+        };
 
-export default App;
+        // Activity Modal Component
+        const ActivityModal = ({ activity, onClose, onSave, onDelete }) => {
+            const [name, setName] = React.useState(activity ? activity.name : '');
+            const [color, setColor] = React.useState(activity ? activity.color : '#FFDDC1'); // Default color
+
+            const handleSave = () => {
+                if (name.trim() === '') {
+                    // In a real app, you'd show a user-friendly message, not alert.
+                    console.error('Activity name cannot be empty.');
+                    return;
+                }
+                onSave({ ...activity, name, color });
+            };
+
+            const handleDelete = () => {
+                if (activity && activity.id) {
+                    onDelete(activity.id);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
+                        <h2 className="text-2xl font-bold text-purple-700 mb-6">
+                            {activity ? 'Edit Activity' : 'Add New Activity'}
+                        </h2>
+                        <div className="mb-4">
+                            <label htmlFor="activityName" className="block text-gray-700 text-sm font-semibold mb-2">
+                                Activity Name:
+                            </label>
+                            <input
+                                type="text"
+                                id="activityName"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-400 focus:border-transparent transition duration-150"
+                                placeholder="e.g., Reading, Park Time"
+                            />
+                        </div>
+                        <div className="mb-6">
+                            <label htmlFor="activityColor" className="block text-gray-700 text-sm font-semibold mb-2">
+                                Choose Color:
+                            </label>
+                            <input
+                                type="color"
+                                id="activityColor"
+                                value={color}
+                                onChange={(e) => setColor(e.target.value)}
+                                className="w-full h-10 rounded-lg border border-gray-300 cursor-pointer"
+                            />
+                        </div>
+                        <div className="flex flex-col sm:flex-row justify-end gap-3">
+                            {activity && ( // Show delete button only if editing existing activity
+                                <button
+                                    onClick={handleDelete}
+                                    className="w-full sm:w-auto bg-red-500 text-white py-2 px-5 rounded-lg shadow-md hover:bg-red-600 transition duration-200 ease-in-out transform hover:scale-105 font-semibold"
+                                >
+                                    Delete
+                                </button>
+                            )}
+                            <button
+                                onClick={onClose}
+                                className="w-full sm:w-auto bg-gray-300 text-gray-800 py-2 px-5 rounded-lg shadow-md hover:bg-gray-400 transition duration-200 ease-in-out transform hover:scale-105 font-semibold"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSave}
+                                className="w-full sm:w-auto bg-purple-600 text-white py-2 px-5 rounded-lg shadow-md hover:bg-purple-700 transition duration-200 ease-in-out transform hover:scale-105 font-semibold"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+
+        // Render the App component into the root div
+        const rootElement = document.getElementById('root');
+        ReactDOM.createRoot(rootElement).render(<App />);
+    </script>
+</body>
+</html>
